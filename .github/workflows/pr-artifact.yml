@@ -6,8 +6,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: attacker-controlled workflow revision
+        run: echo "FORK_PR_WORKFLOW_REVISION=attacker-modified"
       - name: produce coverage file
-        run: mkdir -p out && echo "SF:legit" > out/lcov.info
+        run: mkdir -p out && echo "SF:attacker-controlled" > out/lcov.info
       - name: upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
