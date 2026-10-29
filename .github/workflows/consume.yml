@@ -1,0 +1,63 @@
+# Target-shaped privileged consumer: byte-equivalent logic to
+# adobe/aio-reusable-workflows/.github/workflows/dependabot-coverage-upload.yml@main
+name: consume
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number that received the "/upload-coverage" comment
+        required: true
+        default: '1'
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get PR head SHA
+        id: pr
+        run: |
+          set -euo pipefail
+          SHA=$(gh api repos/$GITHUB_REPOSITORY/pulls/$ISSUE_NUMBER --jq '.head.sha')
+          echo "sha=$SHA"
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.inputs.pr }}
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.sha }}
+      - name: Find original CI run
+        id: run
+        run: |
+          set -euo pipefail
+          RUN_ID=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq "[.artifacts[] | select(.name | startswith(\"coverage-report-ubuntu-latest-\")) | select(.workflow_run.head_sha == \"$HEAD_SHA\")] | first | .workflow_run.id")
+          echo "found_run_id=[$RUN_ID]"
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr.outputs.sha }}
+      - name: Download coverage artifacts
+        id: download
+        if: steps.run.outputs.run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-report-ubuntu-latest-*
+          run-id: ${{ steps.run.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload to Codecov
+        if: steps.download.outcome == 'success'
+        uses: codecov/codecov-action@v4
+        with:
+          token: dummy-codecov-token-for-poc
+          files: '**/lcov.info'
+          override_pr: ${{ github.event.inputs.pr }}
+          override_commit: ${{ steps.pr.outputs.sha }}
+          fail_ci_if_error: false
+      - name: post-step marker
+        if: always()
+        run: echo "consumer finished"
